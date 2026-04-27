@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>TaxiMoto App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <script src='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js'></script>
+    <link href='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css' rel='stylesheet' />
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body { margin: 0; padding: 0; font-family: sans-serif; overflow: hidden; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        .bottom-ui {
+            position: absolute; bottom: 0; width: 100%; background: white;
+            padding: 20px; border-radius: 20px 20px 0 0; box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            text-align: center; box-sizing: border-box; z-index: 10;
+        }
+        .price { font-size: 28px; font-weight: bold; color: #2ecc71; margin-bottom: 15px; }
+        button { background: #2ecc71; color: white; border: none; padding: 15px; width: 100%; border-radius: 12px; font-size: 18px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div class="bottom-ui">
+        <div class="price" id="prix-display">3.0 DT</div>
+        <button id="order-btn">COMMANDER 🛵</button>
+    </div>
+    <script>
+        // --- 1. CONFIGURATION ---
+        mapboxgl.accessToken = 'TON_TOKEN_MAPBOX_ICI'; // <-- METS TON TOKEN ICI
+
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+
+        const map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/streets-v12',
+            center: [10.1815, 36.8065], // Tunis
+            zoom: 12
+        });
+
+        // Épingles de départ et d'arrivée
+        const depMarker = new mapboxgl.Marker({ draggable: true, color: "#3498db" }).setLngLat([10.1815, 36.8065]).addTo(map);
+        const arrMarker = new mapboxgl.Marker({ draggable: true, color: "#e74c3c" }).setLngLat([10.1900, 36.8100]).addTo(map);
+
+        // --- 2. CALCUL DU PRIX ---
+        async function updateRoute() {
+            const start = depMarker.getLngLat();
+            const end = arrMarker.getLngLat();
+            const query = await fetch(`https://api.mapbox.com/directions/v5/mapbox/driving/${start.lng},${start.lat};${end.lng},${end.lat}?geometries=geojson&access_token=${mapboxgl.accessToken}`);
+            const json = await query.json();
+            const data = json.routes[0];
+            const distance = data.distance / 1000;
+
+            let prix = (1.0 + (distance * 0.7)) * 1.2; // Formule avec +20%
+            const finalPrice = Math.max(3.0, Math.round(prix * 10) / 10).toFixed(1);
+            document.getElementById('prix-display').innerText = finalPrice + " DT";
+        }
+
+        depMarker.on('dragend', updateRoute);
+        arrMarker.on('dragend', updateRoute);
+        
+        // --- 3. ENVOI AU BOT ---
+        document.getElementById('order-btn').onclick = () => {
+            const result = { prix: document.getElementById('prix-display').innerText };
+            tg.sendData(JSON.stringify(result));
+            tg.close();
+        };
+    </script>
+</body>
+</html>
